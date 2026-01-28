@@ -1,5 +1,4 @@
 import org.typelevel.scalacoptions.ScalacOptions
-import xerial.sbt.Sonatype._
 
 // Project Information
 
@@ -19,6 +18,12 @@ Global / run / fork              := true
 Global / onChangedBuildSource    := ReloadOnSourceChanges
 Global / tpolecatExcludeOptions ++= Set(ScalacOptions.warnUnusedLocals)
 Test / tpolecatScalacOptions     := Set.empty
+
+ThisBuild / publishTo := {
+  val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
+  if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
+  else localStaging.value
+}
 
 lazy val root =
   project
@@ -71,15 +76,6 @@ lazy val publishSettings =
     ),
     pomIncludeRepository := { _ => false },
     publishMavenStyle    := true,
-    sonatypeProjectHosting := Some(
-      GitHubHosting("ColOfAbRiX", "h4sbl", "colofabrix@tin.it"),
-    ),
-    publishTo := {
-      if (isSnapshot.value)
-        Some(Opts.resolver.sonatypeOssSnapshots.head)
-      else
-        Some(Opts.resolver.sonatypeStaging)
-    },
 
     // Scaladoc settings
     Compile / doc / scalacOptions ++= Seq(
@@ -90,4 +86,24 @@ lazy val publishSettings =
       "-encoding",
       "UTF-8",
     ),
+
+    // External API mappings for Scaladoc links (required because we use Provided)
+    apiMappings ++= {
+      val cp = (Compile / fullClasspath).value.map(_.data)
+
+      def findJar(nameContains: String): Option[java.io.File] =
+        cp.find(_.getName.contains(nameContains))
+
+      val mappings = Map(
+        findJar("cats-effect_3")        -> url("https://typelevel.org/cats-effect/api/3.x/"),
+        findJar("cats-effect-kernel_3") -> url("https://typelevel.org/cats-effect/api/3.x/"),
+        findJar("cats-core_3")          -> url("https://typelevel.org/cats/api/"),
+        findJar("http4s-core_3")        -> url("https://http4s.org/v0.23/api/"),
+        findJar("http4s-client_3")      -> url("https://http4s.org/v0.23/api/"),
+        findJar("log4cats-core_3")      -> url("https://typelevel.org/log4cats/api/"),
+        findJar("fs2-core_3")           -> url("https://fs2.io/api/3.x/"),
+      )
+
+      mappings.collect { case (Some(jar), docUrl) => jar -> docUrl }
+    },
   )
