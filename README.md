@@ -28,7 +28,7 @@ Add the following dependencies to your `build.sbt`:
 libraryDependencies ++= Seq(
   "com.colofabrix.scala" %% "h4sbl"         % "1.0.0",
   "org.http4s"           %% "http4s-client" % <version>,  // Required peer dependency
-  "org.typelevel"        %% "cats-effect"   % <version>,    // Required peer dependency
+  "org.typelevel"        %% "cats-effect"   % <version>,  // Required peer dependency
 )
 ```
 
