@@ -2,7 +2,7 @@ import org.typelevel.scalacoptions.ScalacOptions
 
 // Project Information
 
-val scala3Version = "3.7.4"
+val scala3Version = "3.3.7"
 
 val caseInsensitiveVersion = "1.4.0"
 val catsEffectVersion      = "3.5.4"
@@ -30,7 +30,7 @@ lazy val root =
     .in(file("."))
     .settings(
       name         := "h4sbl",
-      version      := "1.0.0",
+      version      := "1.0.1",
       description  := "Http4s Better Logging",
       organization := "com.colofabrix.scala",
       scalaVersion := scala3Version,
