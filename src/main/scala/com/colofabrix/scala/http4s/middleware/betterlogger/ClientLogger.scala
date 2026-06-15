@@ -156,9 +156,9 @@ object ClientLogger {
     logLevel: LogLevel,
   ): F[Unit] =
     for
-      body    <- reconstructBody(chunks)
-      message  = formatRequest(request, body, config, logLevel)
-      _       <- logAtMaxLevel(logger, message, logLevel)
+      body   <- reconstructBody(chunks)
+      message = formatRequest(request, body, config, logLevel)
+      _      <- logAtMaxLevel(logger, message, logLevel)
     yield ()
 
   private def logResponseMessage[F[_]: Async](
@@ -169,9 +169,9 @@ object ClientLogger {
     logLevel: LogLevel,
   ): F[Unit] =
     for
-      body    <- reconstructBody(chunks)
-      message  = formatResponse(response, body, config, logLevel)
-      _       <- logAtMaxLevel(logger, message, logLevel)
+      body   <- reconstructBody(chunks)
+      message = formatResponse(response, body, config, logLevel)
+      _      <- logAtMaxLevel(logger, message, logLevel)
     yield ()
 
   private def reconstructBody[F[_]: Async](chunks: Ref[F, Vector[Chunk[Byte]]]): F[String] =
@@ -198,13 +198,13 @@ object ClientLogger {
     config: LogConfig,
     logLevel: LogLevel,
   ): String =
-    val c = config.colors
+    val c           = config.colors
     val methodColor = if request.method.isSafe then c.safeMethod else c.unsafeMethod
 
     val parts = List(
       Some(s"${c.httpVersion}${request.httpVersion}${c.reset}"),
       Some(s"$methodColor${request.method}${c.reset}"),
-      Some(s"${c.uri}${request.uri}${c.reset}"),
+      Some(s"${c.uri}${formatUri(request.uri, config)}${c.reset}"),
       formatHeaders(request.headers, config, logLevel),
       formatBody(body, config.logRequestBody, logLevel).map(b => s"${c.body}$b${c.reset}"),
     ).flatten
@@ -217,11 +217,11 @@ object ClientLogger {
     config: LogConfig,
     logLevel: LogLevel,
   ): String =
-    val c = config.colors
+    val c           = config.colors
     val statusColor = response.status.responseClass match
       case Status.Informational | Status.Successful | Status.Redirection => c.successStatus
-      case Status.ClientError => c.clientErrorStatus
-      case Status.ServerError => c.serverErrorStatus
+      case Status.ClientError                                            => c.clientErrorStatus
+      case Status.ServerError                                            => c.serverErrorStatus
 
     val parts = List(
       Some(s"${c.httpVersion}${response.httpVersion}${c.reset}"),
@@ -231,6 +231,27 @@ object ClientLogger {
     ).flatten
 
     parts.mkString(" ")
+
+  private def formatUri(uri: Uri, config: LogConfig): String =
+    val rendered = uri.renderString
+    if !config.redactHeaders || uri.query.isEmpty then
+      rendered
+    else
+      val queryStart = rendered.indexOf('?')
+      if queryStart < 0 then
+        rendered
+      else
+        val (prefix, rest)        = rendered.splitAt(queryStart)
+        val fragmentIdx           = rest.indexOf('#')
+        val (queryPart, fragment) =
+          if fragmentIdx >= 0 then (rest.substring(0, fragmentIdx), rest.substring(fragmentIdx))
+          else (rest, "")
+        val redacted = queryPart.drop(1).split("&").map { param =>
+          val eqIdx = param.indexOf('=')
+          if eqIdx >= 0 then s"${param.substring(0, eqIdx)}=<REDACTED>"
+          else param
+        }.mkString("&")
+        s"$prefix?$redacted$fragment"
 
   private def formatHeaders(headers: Headers, config: LogConfig, logLevel: LogLevel): Option[String] =
     if logLevel < LogLevel.Debug then None

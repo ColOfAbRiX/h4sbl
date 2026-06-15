@@ -19,6 +19,15 @@ Global / onChangedBuildSource    := ReloadOnSourceChanges
 Global / tpolecatExcludeOptions ++= Set(ScalacOptions.warnUnusedLocals)
 Test / tpolecatScalacOptions     := Set.empty
 
+addCommandAlias(
+  "styleApply",
+  "; set ThisBuild / scalacOptions += \"-Wunused:all\"; scalafixEnable; scalafixAll; session clear; scalafmtAll"
+)
+addCommandAlias(
+  "styleCheck",
+  "; set ThisBuild / scalacOptions += \"-Wunused:all\"; scalafixEnable; scalafixAll --check; session clear; scalafmtCheckAll"
+)
+
 ThisBuild / publishTo := {
   val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
   if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
