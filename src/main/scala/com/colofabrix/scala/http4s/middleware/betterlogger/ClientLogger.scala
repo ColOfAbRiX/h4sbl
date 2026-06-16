@@ -156,9 +156,10 @@ object ClientLogger {
     logLevel: LogLevel,
   ): F[Unit] =
     for
-      body   <- reconstructBody(chunks)
-      message = formatRequest(request, body, config, logLevel)
-      _      <- logAtMaxLevel(logger, message, logLevel)
+      rawBody <- reconstructBody(chunks)
+      body     = config.sanitizeBody(rawBody)
+      message  = formatRequest(request, body, config, logLevel)
+      _       <- logAtMaxLevel(logger, message, logLevel)
     yield ()
 
   private def logResponseMessage[F[_]: Async](
@@ -169,9 +170,10 @@ object ClientLogger {
     logLevel: LogLevel,
   ): F[Unit] =
     for
-      body   <- reconstructBody(chunks)
-      message = formatResponse(response, body, config, logLevel)
-      _      <- logAtMaxLevel(logger, message, logLevel)
+      rawBody <- reconstructBody(chunks)
+      body     = config.sanitizeBody(rawBody)
+      message  = formatResponse(response, body, config, logLevel)
+      _       <- logAtMaxLevel(logger, message, logLevel)
     yield ()
 
   private def reconstructBody[F[_]: Async](chunks: Ref[F, Vector[Chunk[Byte]]]): F[String] =
@@ -257,7 +259,7 @@ object ClientLogger {
     if logLevel < LogLevel.Debug then None
     else
       val redactWhen: org.typelevel.ci.CIString => Boolean =
-        if config.redactHeaders then Headers.SensitiveHeaders.contains
+        if config.redactHeaders then (Headers.SensitiveHeaders ++ config.sensitiveHeaders).contains
         else _ => false
 
       val formatted = headers.mkString("Headers(", ", ", ")", redactWhen)

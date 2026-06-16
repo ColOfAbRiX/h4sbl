@@ -1,5 +1,6 @@
 package com.colofabrix.scala.http4s.middleware.betterlogger
 
+import org.typelevel.ci.CIString
 import scala.Console.*
 
 /**
@@ -9,10 +10,16 @@ import scala.Console.*
  * including header redaction, body logging, and output colors.
  *
  * @param redactHeaders whether to redact sensitive headers like Authorization, Cookie, etc.
- *                      When true, sensitive header values are replaced with "&lt;REDACTED&gt;"
+ *                      When true, sensitive header values are replaced with "<REDACTED>"
+ * @param sensitiveHeaders additional header names to redact on top of the built-in set
+ *                         (Authorization, Proxy-Authorization, Cookie, Set-Cookie).
+ *                         Only effective when `redactHeaders` is `true`.
  * @param colors the color scheme to use for console output
  * @param logRequestBody whether to include request bodies in log output (only at TRACE level)
  * @param logResponseBody whether to include response bodies in log output (only at TRACE level)
+ * @param sanitizeBody a function applied to the body string before logging. Use this to redact
+ *                     sensitive fields (e.g., passwords, tokens) from request/response bodies.
+ *                     Defaults to identity (no transformation). Only applied at TRACE level.
  *
  * @example
  *   {{{
@@ -26,13 +33,21 @@ import scala.Console.*
  *     logRequestBody = true,
  *     logResponseBody = false
  *   )
+ *
+ *   // Redact standard headers plus custom ones
+ *   val config = LogConfig(
+ *     redactHeaders = true,
+ *     sensitiveHeaders = Set(CIString("X-Api-Key"), CIString("X-Auth-Token")),
+ *   )
  *   }}}
  */
 final case class LogConfig(
   redactHeaders: Boolean = true,
+  sensitiveHeaders: Set[CIString] = Set.empty,
   colors: LogColors = LogColors.default,
   logRequestBody: Boolean = true,
   logResponseBody: Boolean = true,
+  sanitizeBody: String => String = identity,
 )
 
 /**

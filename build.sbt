@@ -39,7 +39,7 @@ lazy val root =
     .in(file("."))
     .settings(
       name         := "h4sbl",
-      version      := "1.0.1",
+      version      := "1.1.0",
       description  := "Http4s Better Logging",
       organization := "com.colofabrix.scala",
       scalaVersion := scala3Version,
