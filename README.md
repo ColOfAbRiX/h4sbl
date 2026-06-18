@@ -1,5 +1,6 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Maven Central](https://img.shields.io/maven-central/v/com.colofabrix.scala/h4sbl_3.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22com.colofabrix.scala%22%20AND%20a:%22h4sbl_3%22)
+[![Scala 3.3](https://img.shields.io/badge/Scala-3.3-blue.svg)](https://www.scala-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 # Http4s Better Logger (h4sbl)
 
@@ -27,7 +28,7 @@ Add the following dependencies to your `build.sbt`:
 
 ```scala
 libraryDependencies ++= Seq(
-  "com.colofabrix.scala" %% "h4sbl"         % "1.1.0",
+  "com.colofabrix.scala" %% "h4sbl"         % "<see Maven Central badge",
   "org.http4s"           %% "http4s-client" % <version>,  // Required peer dependency
   "org.typelevel"        %% "cats-effect"   % <version>,  // Required peer dependency
 )
