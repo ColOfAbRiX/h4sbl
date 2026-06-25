@@ -7,28 +7,33 @@ import scala.Console.*
  * Configuration for the HTTP client logger middleware.
  *
  * This case class provides all customization options for the logging behavior,
- * including header redaction, body logging, and output colors.
+ * including secret redaction, body logging, and output colors.
  *
- * @param redactHeaders whether to redact sensitive headers like Authorization, Cookie, etc.
- *                      When true, sensitive header values are replaced with "<REDACTED>"
- * @param sensitiveHeaders additional header names to redact on top of the built-in set
- *                         (Authorization, Proxy-Authorization, Cookie, Set-Cookie).
- *                         Only effective when `redactHeaders` is `true`.
+ * @param redactSecrets master switch for all redaction. When `true`, sensitive headers,
+ *                      URI query parameters, and body sanitization are all active.
+ *                      When `false`, no redaction is applied at all.
+ * @param sensitiveHeaders header names to redact. When empty, the built-in set from http4s
+ *                         (Authorization, Cookie, Set-Cookie) is used.
+ *                         Only effective when `redactSecrets` is `true`.
+ * @param sensitiveQueryParams query parameter names to redact. When empty, the built-in
+ *                             [[LogConfig.SensitiveQueryParams]] set is used.
+ *                             Only effective when `redactSecrets` is `true`.
  * @param colors the color scheme to use for console output
  * @param logRequestBody whether to include request bodies in log output (only at TRACE level)
  * @param logResponseBody whether to include response bodies in log output (only at TRACE level)
  * @param sanitizeBody a function applied to the body string before logging. Use this to redact
  *                     sensitive fields (e.g., passwords, tokens) from request/response bodies.
- *                     Defaults to identity (no transformation). Only applied at TRACE level.
+ *                     Defaults to identity (no transformation). Only applied when `redactSecrets`
+ *                     is `true` and at TRACE level.
  *
  * @example
  *   {{{
  *   // Default configuration
  *   val config = LogConfig.default
  *
- *   // Custom configuration
+ *   // Disable all redaction (useful for debugging)
  *   val config = LogConfig(
- *     redactHeaders = false,
+ *     redactSecrets = false,
  *     colors = LogColors.noColors,
  *     logRequestBody = true,
  *     logResponseBody = false
@@ -36,14 +41,20 @@ import scala.Console.*
  *
  *   // Redact standard headers plus custom ones
  *   val config = LogConfig(
- *     redactHeaders = true,
+ *     redactSecrets = true,
  *     sensitiveHeaders = Set(CIString("X-Api-Key"), CIString("X-Auth-Token")),
+ *   )
+ *
+ *   // Redact additional query parameters beyond the built-in defaults
+ *   val config = LogConfig(
+ *     sensitiveQueryParams = Set("my_secret_param"),
  *   )
  *   }}}
  */
 final case class LogConfig(
-  redactHeaders: Boolean = true,
+  redactSecrets: Boolean = true,
   sensitiveHeaders: Set[CIString] = Set.empty,
+  sensitiveQueryParams: Set[String] = Set.empty,
   colors: LogColors = LogColors.default,
   logRequestBody: Boolean = true,
   logResponseBody: Boolean = true,
@@ -51,18 +62,44 @@ final case class LogConfig(
 )
 
 /**
- * Companion object providing default configuration instances.
+ * Companion object providing default configuration instances and built-in sensitive sets.
  */
 object LogConfig {
 
   /**
    * Default logging configuration.
    *
-   * Uses default settings: redacts sensitive headers, logs request/response bodies,
-   * and uses the default color scheme.
+   * Uses default settings: redacts sensitive headers and query parameters, logs request/response
+   * bodies, and uses the default color scheme.
    */
   val default: LogConfig =
     LogConfig()
+
+  /**
+   * Built-in set of sensitive query parameter names.
+   *
+   * These parameter names are automatically redacted in URI query strings when
+   * `redactSecrets` is `true` and `sensitiveQueryParams` is empty. Analogous to
+   * `Headers.SensitiveHeaders` for HTTP headers.
+   */
+  val SensitiveQueryParams: Set[String] =
+    Set(
+    "api_key",
+    "apikey",
+    "api-key",
+    "token",
+    "access_token",
+    "access-token",
+    "refresh_token",
+    "refresh-token",
+    "password",
+    "passwd",
+    "secret",
+    "client_secret",
+    "client-secret",
+    "private_key",
+    "private-key",
+  )
 
 }
 

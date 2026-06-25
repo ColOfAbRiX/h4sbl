@@ -10,6 +10,8 @@ val catsVersion            = "2.12.0"
 val fs2Version             = "3.9.3"
 val http4sClientVersion    = "0.23.24"
 val log4catsVersion        = "2.7.0"
+val munitVersion           = "1.0.4"
+val munitCatsEffectVersion = "2.0.0"
 val scodecBitsVersion      = "1.1.38"
 
 // Global Settings
@@ -39,7 +41,7 @@ lazy val root =
     .in(file("."))
     .settings(
       name         := "h4sbl",
-      version      := "1.1.0",
+      version      := "1.2.0",
       description  := "Http4s Better Logging",
       organization := "com.colofabrix.scala",
       scalaVersion := scala3Version,
@@ -54,6 +56,8 @@ lazy val root =
         "org.typelevel" %% "case-insensitive"   % caseInsensitiveVersion,
         "org.typelevel" %% "log4cats-core"      % log4catsVersion,
         "org.typelevel" %% "log4cats-slf4j"     % log4catsVersion,
+        "org.scalameta" %% "munit"              % munitVersion           % Test,
+        "org.typelevel" %% "munit-cats-effect"  % munitCatsEffectVersion % Test,
       ),
       semanticdbEnabled := true,
       semanticdbVersion := scalafixSemanticdb.revision,

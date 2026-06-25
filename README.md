@@ -15,10 +15,10 @@ verbosity.
 ## Features
 
 - **Colorful Output** - Color-coded HTTP methods, status codes, and headers for easy visual parsing
-- **Configurable** - Full control over colors, header redaction, and body logging
+- **Configurable** - Full control over colors, secret redaction, and body logging
 - **Log Level Aware** - Automatically adjusts verbosity based on your logger configuration
 - **Header Redaction** - Automatically redacts sensitive headers (Authorization, Cookie, etc.) with support for custom headers
-- **URI Redaction** - Query parameter values are automatically redacted when header redaction is enabled
+- **URI Redaction** - Redacts sensitive query parameter values (tokens, API keys, passwords) when secret redaction is enabled
 - **Body Capture** - Optionally logs request and response bodies at TRACE level with a sanitization hook
 - **Minimal Boilerplate** - Simple API that wraps your existing http4s client
 
@@ -28,7 +28,7 @@ Add the following dependencies to your `build.sbt`:
 
 ```scala
 libraryDependencies ++= Seq(
-  "com.colofabrix.scala" %% "h4sbl"         % "<see Maven Central badge",
+  "com.colofabrix.scala" %% "h4sbl"         % "<see Maven Central badge>",
   "org.http4s"           %% "http4s-client" % <version>,  // Required peer dependency
   "org.typelevel"        %% "cats-effect"   % <version>,  // Required peer dependency
 )
@@ -60,24 +60,25 @@ object MyApp extends IOApp.Simple:
       }
 ```
 
-### With Header Redaction Control
+### With Secret Redaction Control
 
-Control whether sensitive headers are redacted in logs:
+Control whether sensitive data is redacted in logs:
 
 ```scala
 import com.colofabrix.scala.http4s.middleware.betterlogger.*
 
-// Redact sensitive headers (default behavior)
+// Redact secrets (default behavior)
 val safeLoggingClient = ClientLogger(httpClient)
 
-// Show all headers (useful for debugging)
-val debugClient = ClientLogger.withConfig(LogConfig(redactHeaders = false))(httpClient)
+// Show everything (useful for debugging)
+val debugClient = ClientLogger.withConfig(LogConfig(redactSecrets = false))(httpClient)
 ```
 
-When `redactHeaders = true`, the following are automatically redacted:
-- **Headers:** Authorization, Proxy-Authorization, Cookie, Set-Cookie (built-in) plus any
-  custom headers specified in `sensitiveHeaders`
-- **URI query parameters:** All query string values (e.g. `?token=secret` becomes `?token=<REDACTED>`)
+When `redactSecrets = true` (the default), the following are automatically redacted:
+- **Headers:** Authorization, Cookie, Set-Cookie (built-in via http4s `Headers.SensitiveHeaders`)
+  plus any custom headers specified in `sensitiveHeaders`
+- **URI query parameters:** Parameter values matching the built-in set (`token`, `api_key`,
+  `password`, `secret`, etc.) or custom names specified in `sensitiveQueryParams`
 
 ### Full Configuration
 
@@ -89,8 +90,9 @@ import org.typelevel.ci.CIString
 
 val config =
   LogConfig(
-    redactHeaders = true,
+    redactSecrets = true,
     sensitiveHeaders = Set(CIString("X-Api-Key"), CIString("X-Auth-Token")),
+    sensitiveQueryParams = Set("my_secret_param"),
     colors = LogColors.default,
     logRequestBody = true,
     logResponseBody = true,
@@ -104,7 +106,7 @@ val loggingClient = ClientLogger.withConfig(config)(httpClient)
 
 When logging bodies at TRACE level, you can provide a `sanitizeBody` function to redact
 sensitive data before it appears in logs. The function receives the raw body string and returns
-the sanitized version:
+the sanitized version. Body sanitization is only applied when `redactSecrets = true`:
 
 ```scala
 import com.colofabrix.scala.http4s.middleware.betterlogger.*
@@ -148,14 +150,24 @@ The main entry point for creating a logging middleware.
 
 Configuration case class for logging behavior.
 
-| Parameter          | Type              | Default              | Description                                                    |
-|--------------------|-------------------|----------------------|----------------------------------------------------------------|
-| `redactHeaders`    | `Boolean`         | `true`               | Redact sensitive headers and URI query params in output        |
-| `sensitiveHeaders` | `Set[CIString]`   | `Set.empty`          | Additional header names to redact (on top of built-in set)     |
-| `colors`           | `LogColors`       | `LogColors.default`  | Color scheme for console output                                |
-| `logRequestBody`   | `Boolean`         | `true`               | Log request bodies (only at TRACE level)                       |
-| `logResponseBody`  | `Boolean`         | `true`               | Log response bodies (only at TRACE level)                      |
-| `sanitizeBody`     | `String => String`| `identity`           | Transform function applied to body strings before logging      |
+| Parameter             | Type              | Default                    | Description                                                         |
+|-----------------------|-------------------|----------------------------|---------------------------------------------------------------------|
+| `redactSecrets`       | `Boolean`         | `true`                     | Master switch for all redaction (headers, query params, body)       |
+| `sensitiveHeaders`    | `Set[CIString]`   | `Set.empty`                | Header names to redact (replaces built-in set when non-empty)       |
+| `sensitiveQueryParams`| `Set[String]`     | `Set.empty`                | Query param names to redact (replaces built-in set when non-empty)  |
+| `colors`              | `LogColors`       | `LogColors.default`        | Color scheme for console output                                     |
+| `logRequestBody`      | `Boolean`         | `true`                     | Log request bodies (only at TRACE level)                            |
+| `logResponseBody`     | `Boolean`         | `true`                     | Log response bodies (only at TRACE level)                           |
+| `sanitizeBody`        | `String => String`| `identity`                 | Transform function applied to body strings before logging           |
+
+**Built-in sensitive sets:**
+- **Headers** (from http4s `Headers.SensitiveHeaders`): `Authorization`, `Cookie`, `Set-Cookie`
+- **Query parameters** (`LogConfig.SensitiveQueryParams`): `api_key`, `apikey`, `api-key`, `token`,
+  `access_token`, `access-token`, `refresh_token`, `refresh-token`, `password`, `passwd`, `secret`,
+  `client_secret`, `client-secret`, `private_key`, `private-key`
+
+> When `sensitiveHeaders` or `sensitiveQueryParams` are non-empty, they **replace** the built-in
+> set entirely. They are not additive. To extend the built-in set, include all desired names.
 
 ### LogColors
 

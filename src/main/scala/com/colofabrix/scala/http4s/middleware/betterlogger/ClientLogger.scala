@@ -6,6 +6,7 @@ import cats.syntax.all.*
 import fs2.*
 import org.http4s.*
 import org.http4s.client.*
+import org.typelevel.ci.CIString
 import org.typelevel.log4cats.SelfAwareStructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
@@ -15,7 +16,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
  * This middleware provides comprehensive logging for HTTP client operations with:
  *   - Configurable colors and formatting for console output
  *   - Request and response body capture and logging
- *   - Sensitive header redaction
+ *   - Sensitive header and query parameter redaction
  *   - Log level-aware output (more detail at TRACE level)
  *
  * @example
@@ -24,7 +25,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
  *   val loggingClient = ClientLogger(httpClient)
  *
  *   // With custom configuration
- *   val config = LogConfig(redactHeaders = false, logRequestBody = true)
+ *   val config = LogConfig(redactSecrets = false, logRequestBody = true)
  *   val loggingClient = ClientLogger.withConfig(config)(httpClient)
  *   }}}
  */
@@ -33,22 +34,22 @@ object ClientLogger {
   /**
    * Creates a logging middleware for an HTTP4s client with default configuration.
    *
-   * Uses default settings: redacts sensitive headers, logs request/response bodies,
-   * and uses default color scheme.
+   * Uses default settings: redacts sensitive headers and query parameters, logs request/response
+   * bodies, and uses default color scheme.
    *
    * @tparam F the effect type (must have an Async instance)
    * @param client the HTTP4s client to wrap with logging
    * @return a new client that logs all requests and responses
    */
   def apply[F[_]: Async](client: Client[F]): Client[F] =
-    val config = LogConfig(redactHeaders = true)
+    val config = LogConfig(redactSecrets = true)
     withConfig(config)(client)
 
   /**
    * Creates a logging middleware with full configuration control.
    *
    * This is the most flexible constructor, allowing complete customization of
-   * logging behavior including colors, body logging, and header redaction.
+   * logging behavior including colors, body logging, and secret redaction.
    *
    * @tparam F the effect type (must have an Async instance)
    * @param config the logging configuration
@@ -157,7 +158,7 @@ object ClientLogger {
   ): F[Unit] =
     for
       rawBody <- reconstructBody(chunks)
-      body     = config.sanitizeBody(rawBody)
+      body     = if config.redactSecrets then config.sanitizeBody(rawBody) else rawBody
       message  = formatRequest(request, body, config, logLevel)
       _       <- logAtMaxLevel(logger, message, logLevel)
     yield ()
@@ -171,7 +172,7 @@ object ClientLogger {
   ): F[Unit] =
     for
       rawBody <- reconstructBody(chunks)
-      body     = config.sanitizeBody(rawBody)
+      body     = if config.redactSecrets then config.sanitizeBody(rawBody) else rawBody
       message  = formatResponse(response, body, config, logLevel)
       _       <- logAtMaxLevel(logger, message, logLevel)
     yield ()
@@ -194,7 +195,7 @@ object ClientLogger {
 
   // --- Message Formatting ---
 
-  private def formatRequest[F[_]](
+  private[betterlogger] def formatRequest[F[_]](
     request: Request[F],
     body: String,
     config: LogConfig,
@@ -213,7 +214,7 @@ object ClientLogger {
 
     parts.mkString(" ")
 
-  private def formatResponse[F[_]](
+  private[betterlogger] def formatResponse[F[_]](
     response: Response[F],
     body: String,
     config: LogConfig,
@@ -234,9 +235,9 @@ object ClientLogger {
 
     parts.mkString(" ")
 
-  private def formatUri(uri: Uri, config: LogConfig): String =
+  private[betterlogger] def formatUri(uri: Uri, config: LogConfig): String =
     val rendered = uri.renderString
-    if !config.redactHeaders || uri.query.isEmpty then
+    if !config.redactSecrets || uri.query.isEmpty then
       rendered
     else
       val queryStart = rendered.indexOf('?')
@@ -248,25 +249,51 @@ object ClientLogger {
         val (queryPart, fragment) =
           if fragmentIdx >= 0 then (rest.substring(0, fragmentIdx), rest.substring(fragmentIdx))
           else (rest, "")
+        val sensitiveParams = resolveSensitiveQueryParams(config)
         val redacted = queryPart.drop(1).split("&").map { param =>
           val eqIdx = param.indexOf('=')
-          if eqIdx >= 0 then s"${param.substring(0, eqIdx)}=<REDACTED>"
+          if eqIdx >= 0 then
+            val name = param.substring(0, eqIdx)
+            if sensitiveParams.exists(_.equalsIgnoreCase(name)) then s"$name=<REDACTED>"
+            else param
           else param
         }.mkString("&")
         s"$prefix?$redacted$fragment"
 
-  private def formatHeaders(headers: Headers, config: LogConfig, logLevel: LogLevel): Option[String] =
+  private[betterlogger] def formatHeaders(headers: Headers, config: LogConfig, logLevel: LogLevel): Option[String] =
     if logLevel < LogLevel.Debug then None
     else
       val redactWhen: org.typelevel.ci.CIString => Boolean =
-        if config.redactHeaders then (Headers.SensitiveHeaders ++ config.sensitiveHeaders).contains
+        if config.redactSecrets then (resolveSensitiveHeaders(config)).contains
         else _ => false
 
       val formatted = headers.mkString("Headers(", ", ", ")", redactWhen)
       Some(s"${config.colors.headers}$formatted${config.colors.reset}")
 
-  private def formatBody(body: String, shouldLog: Boolean, logLevel: LogLevel): Option[String] =
+  private[betterlogger] def formatBody(body: String, shouldLog: Boolean, logLevel: LogLevel): Option[String] =
     if !shouldLog || logLevel < LogLevel.Trace || body.isEmpty then None
     else Some(s"""body="$body"""")
+
+  // --- Redaction Resolution ---
+
+  /**
+   * Resolves the effective set of sensitive headers.
+   *
+   * If the user provided custom `sensitiveHeaders`, those are used exclusively.
+   * Otherwise, the built-in `Headers.SensitiveHeaders` from http4s is used.
+   */
+  private def resolveSensitiveHeaders(config: LogConfig): Set[CIString] =
+    if config.sensitiveHeaders.nonEmpty then config.sensitiveHeaders
+    else Headers.SensitiveHeaders
+
+  /**
+   * Resolves the effective set of sensitive query parameter names.
+   *
+   * If the user provided custom `sensitiveQueryParams`, those are used exclusively.
+   * Otherwise, the built-in [[LogConfig.SensitiveQueryParams]] is used.
+   */
+  private def resolveSensitiveQueryParams(config: LogConfig): Set[String] =
+    if config.sensitiveQueryParams.nonEmpty then config.sensitiveQueryParams
+    else LogConfig.SensitiveQueryParams
 
 }
